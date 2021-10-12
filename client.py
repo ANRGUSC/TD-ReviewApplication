@@ -21,6 +21,10 @@ disapproval_parser.set_defaults(mode="disapprove")
 disapproval_parser.add_argument("--id", help="disapprover ID")
 disapproval_parser.add_argument("file_id", help="file ID to disapprove")
 
+query_parser = subparsers.add_parser("query")
+query_parser.set_defaults(mode="query")
+query_parser.add_argument("file_id", help="file ID to query")
+
 args = parser.parse_args()
 
 if not hasattr(args, "mode"):
@@ -36,11 +40,16 @@ elif args.mode == "approve":
     z = json.dumps({"mode": "approval", "approver_id": args.id, "file_id": args.file_id, "approve": True})
 elif args.mode == "disapprove":
     z = json.dumps({"mode": "approval", "approver_id": args.id, "file_id": args.file_id, "approve": False})
+elif args.mode == "query":
+    z = json.dumps({"mode": "query", "file_id": args.file_id})
 
 s = socket.socket()
 port = 3125
 s.connect(('localhost', port))
 s.sendall(z.encode())    
+
+res = json.loads(s.recv(1024))
+print(res)
 s.close()
 
 

@@ -5,9 +5,13 @@ import json
 from uuid import uuid4
 from pprint import pprint 
 import random
+import math
+
+def serialize_sets(obj):
+    if isinstance(obj, set):
+        return list(obj)
 
 DATABASE = {}
-
 
 
 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -17,6 +21,8 @@ print ('Socket binded to port 3125')
 s.listen(3)
 print ('socket is listening')
 
+approver_ids = [f"A{i}" for i in range(1, 21)]
+
 while True:
   c, addr = s.accept()
   print ('Got connection from ', addr)
@@ -24,45 +30,43 @@ while True:
 
   req = json.loads(var_re)
 
+  res = {"message": "Unknown Error"}
   try: 
     if req["mode"] == "upload":
       file_id = str(uuid4())
       DATABASE[file_id] = {
         "content": req["content"],
         "approvals": set(),
-        "disapprovals": set()
+        "disapprovals": set(),
+        "required_approvers": random.sample(approver_ids, 5),
+        "has_majority": False
       } 
-      print(f"Saved new file with ID: {file_id}")
-      approver_id = ["a1","a2","a3","a4","a5","a6","a7","a8","a9","a10"]
-      sample_list = random.sample(approver_id, 5)
-      for x in sample_list:
-        print("Hello, %s You are chosen to give your review!! " %x)
-      
-      
-
+      res = {"message": "Success: File Added", "file_id": file_id}
     elif req["mode"] == "approval":
       if req["approve"]:
-        DATABASE[req["file_id"]]["approvals"].add(req["approver_id"])
-        print(f"{req['file_id']} approved by {req['approver_id']}")
-        #print(DATABASE[1]['approvals'])
+        if req['approver_id'] not in DATABASE[req["file_id"]]["required_approvers"]:
+          res = {
+            "message": f"{req['approver_id']} is not a required approver", 
+            "required_approvers": DATABASE[req["file_id"]]["required_approvers"]
+          }
+        else:
+          DATABASE[req["file_id"]]["approvals"].add(req["approver_id"])
+          res = {"message": f"Success: File {req['file_id']} approved by {req['approver_id']}"}
+          if len(DATABASE[req["file_id"]]["approvals"]) >= math.ceil(len(DATABASE[req["file_id"]]["required_approvers"]) / 2):
+            DATABASE[req["file_id"]]["has_majority"] = True
       else:
         DATABASE[req["file_id"]]["disapprovals"].add(req["approver_id"])
-        print(f"{req['file_id']} disapproved by {req['approver_id']}")
+        res = {"message": f"Success: File {req['file_id']} disapproved by {req['approver_id']}"}
+    elif req["mode"] == "query":
+      file_id = req["file_id"]
+      res = {"message": "Success: Found file {file_id}", "file": DATABASE[file_id]} 
     else:
-      print(f"INVALID MODE: {req['mode']}")
+      res = {"message": f"INVALID MODE: {req['mode']}"}
   except Exception as e:
-    print(f"ERROR: ({type(e)}) {e}")
+    res = {"message": f"ERROR: ({type(e)}) {e}"}
 
   print("Current Database State:")
   pprint(DATABASE)
   
-  ap = len(DATABASE[file_id]['approvals'])
-  dp = len(DATABASE[file_id]['disapprovals'])
-  m = ap + dp
-  if(m == 5):
-    if ap>dp:
-      print("Product Approved~Your reviews are accepted,kudos with File-ID:", file_id, DATABASE[file_id]['approvals'])
-    else:
-      print("Product Rejected~Your reviews are accepted,kudos with File-ID:", file_id, DATABASE[file_id]['disapprovals'])
-    
+  c.sendall(json.dumps(res, default=serialize_sets).encode())
   c.close()
