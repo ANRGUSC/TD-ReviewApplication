@@ -1,7 +1,27 @@
-import  socket
+import socket
 import json 
 import argparse 
 import sys 
+   
+import requests
+from base64 import b64decode, b64encode
+from datetime import datetime 
+
+def get_value(args: argparse.Namespace) -> None:
+    res = requests.get(f'http://localhost:26657/abci_query?data="{args.key}"')
+    if res.status_code == 200:
+        res_json = res.json()["result"]
+        value = b64decode(res_json["response"]["value"].encode("utf-8")).decode("utf-8")
+        print(value)
+    else:
+        print(res.status_code)
+        print(res.text)
+
+def send_tx(tx: Dict) -> None:
+    tx_serialized = b64encode(json.dumps(tx).encode()).decode()
+    res = requests.get(f'http://localhost:26657/broadcast_tx_commit?tx="{tx_serialized}"')
+    print(res.status_code)
+    print(res.text)
 
 
 parser = argparse.ArgumentParser()

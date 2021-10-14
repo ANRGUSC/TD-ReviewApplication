@@ -1,0 +1,21 @@
+image:
+  file: .gitpod.Dockerfile
+tasks:
+  - name: Python Requirements
+    command: pip install -r /workspace/requirements.txt 
+  # - name: GUI Requirements
+  #   command: yarn --cwd /workspace/tendermint_demo/tendermint-gui install
+ports:
+  - port: 26656
+    onOpen: ignore
+  - port: 26657
+    onOpen: ignore
+  - port: 26658
+    onOpen: ignore
+  - port: 3000
+    onOpen: open-preview
+vscode:
+  extensions:
+    - GitHub.vscode-pull-request-github
+    - ms-python.python
+    - ms-azuretools.vscode-docker
