@@ -37,16 +37,17 @@ from abci.application import BaseApplication, OkCode, ErrorCode
 import json 
 import pathlib 
 from hashlib import sha256
+from base64 import b64encode, b64decode
+from uuid import uuid4
+import random
+import math
 
 thisdir = pathlib.Path(__file__).resolve().parent
 
-def encode_number(value):
-    return struct.pack(">I", value)
 
-
-def decode_number(raw):
-    return int.from_bytes(raw, byteorder="big")
-
+def serialize_sets(obj):
+    if isinstance(obj, set):
+        return list(obj)
 
 class FileApprover(BaseApplication):
     def info(self, req) -> ResponseInfo:
@@ -60,6 +61,7 @@ class FileApprover(BaseApplication):
     def init_chain(self, req) -> ResponseInitChain:
         """Initializes Application"""
         self.data = {}
+        self.approver_ids = [f"A{i}" for i in range(1, 21)]
         return ResponseInitChain()
 
     def check_tx(self, tx: bytes) -> ResponseCheckTx:
@@ -79,22 +81,20 @@ class FileApprover(BaseApplication):
         Perform all checks, verify transaction is valid, and modify 
         applciation state.
         """
-        req = json.loads(tx)
-
-        res = {"message": "Unknown Error"}
         try: 
+            req = json.loads(b64decode(tx))
             if req["mode"] == "upload":
                 file_id = str(uuid4())
                 self.data[file_id] = {
                     "content": req["content"],
                     "approvals": set(),
                     "disapprovals": set(),
-                    "required_approvers": random.sample(approver_ids, 5),
+                    "required_approvers": random.sample(self.approver_ids, 5),
                     "has_majority": False
                 } 
                 return ResponseDeliverTx(
                     code=OkCode,
-                    log="Success: File Added"
+                    log=f"Success: File Added with ID {file_id}"
                 )
             elif req["mode"] == "approval":
                 if req["approve"]:
@@ -105,14 +105,14 @@ class FileApprover(BaseApplication):
                         )
                     else:
                         self.data[req["file_id"]]["approvals"].add(req["approver_id"])
+                        # Smart Contract Behavior
+                        if len(self.data[req["file_id"]]["approvals"]) >= math.ceil(len(self.data[req["file_id"]]["required_approvers"]) / 2):
+                            self.data[req["file_id"]]["has_majority"] = True
                         return ResponseDeliverTx(
                             code=OkCode,
                             log=f"Success: File {req['file_id']} approved by {req['approver_id']}"
                         )
 
-                    # Smart Contract Behavior
-                    if len(self.data[req["file_id"]]["approvals"]) >= math.ceil(len(self.data[req["file_id"]]["required_approvers"]) / 2):
-                        self.data[req["file_id"]]["has_majority"] = True
                 else:
                     if req['approver_id'] not in self.data[req["file_id"]]["required_approvers"]:
                         return ResponseDeliverTx(
@@ -126,12 +126,12 @@ class FileApprover(BaseApplication):
                             log=f"Success: File {req['file_id']} disapproved by {req['approver_id']}"
                         )
             else:
-                ResponseDeliverTx(
+                return ResponseDeliverTx(
                     code=ErrorCode,
                     log=f"INVALID MODE: {req['mode']}"
                 )
         except Exception as e:
-            ResponseDeliverTx(
+            return ResponseDeliverTx(
                 code=ErrorCode,
                 log=f"ERROR: ({type(e)}) {e}"
             )
@@ -143,14 +143,20 @@ class FileApprover(BaseApplication):
         In this implementation, the query returns the current value for a 
         specified key or N/A if the key does not exist
         """
-        key: str = req.data.decode("utf-8")
+        file_id: str = req.data.decode("utf-8")
+        if not file_id:
+            return ResponseQuery(
+                code=OkCode, 
+                value=json.dumps(list(self.data.keys()), default=serialize_sets).encode("utf-8")
+            )
         return ResponseQuery(
-            code=OkCode, value=self.data.get(key, {"value": "N/A"})["value"].encode("utf-8")
+            code=OkCode, 
+            value=json.dumps(self.data.get(file_id, {}), default=serialize_sets).encode("utf-8")
         )
 
     def commit(self) -> ResponseCommit:
         """Persist the application state"""
-        json_str = json.dumps(self.data, indent=4)
+        json_str = json.dumps(self.data, indent=4, default=serialize_sets)
         thisdir.joinpath("state.json").write_text(json_str)
         return ResponseCommit(data=sha256(json_str.encode("utf-8")).digest())
 

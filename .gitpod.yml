@@ -2,9 +2,9 @@ image:
   file: .gitpod.Dockerfile
 tasks:
   - name: Python Requirements
-    command: pip install -r /workspace/requirements.txt 
+    command: pip install -r ./requirements.txt 
   # - name: GUI Requirements
-  #   command: yarn --cwd /workspace/tendermint_demo/tendermint-gui install
+  #   command: yarn --cwd ./tendermint-gui install
 ports:
   - port: 26656
     onOpen: ignore

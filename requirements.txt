@@ -1,0 +1,9 @@
+abci==0.8.3
+certifi==2021.10.8
+charset-normalizer==2.0.7
+colorlog==6.5.0
+idna==3.3
+protobuf==3.18.1
+requests==2.26.0
+toml==0.10.2
+urllib3==1.26.7
